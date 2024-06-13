@@ -1,0 +1,861 @@
+
+Periods
+
+Period Name = IF(Period[periods_ago]<10,"0"&Period[periods_ago]&": "&Period[PERIOD],Period[periods_ago]&": "&Period[PERIOD])
+
+
+
+Creating a toggle with measures.
+
+Say you have a table and you want to fitler by "Branches that have a goods value" vs "Brnaches that hav ea 0 goods value"
+
+1. You would first create a little table called "Flag" for your slicer
+ex. 
+
+Flag table
+Type			|	ID
+Branches with value	|	1
+Branches without value	|	2
+Everything		|	3
+
+2. NExt you need a measure inside your table to figure out which branches have a value or no value
+	DAX MEasure: Flag Measure = IF([Branch Goods]=0,"No Value","Value")
+Plase this measue inside the table
+
+3. Next is will make is easier to reference as a numeric so create another Dax statment to convert the text values to numbers
+	DAX: Measure Filter = var generated = "Value"
+		var selected = [Flag Measure]
+		return IF(selected = generated,1,0)
+Add this column to the table
+
+4. Last you'll need another measure to connected your table slicer to the table you are trying ot filter
+	DAX: fLAG fILTER = VAR GENERATED = 1
+		VAR NON_GENERATED = 0
+		RETURN IF(AND(SELECTEDVALUE('Flag'[ID])=1,[Measure Filter]=1),1,
+		IF(AND(SELECTEDVALUE('Flag'[ID])=0,[Measure Filter]=0),1,IF(SELECTEDVALUE('Flag'[ID])=3,1,0)))
+
+add this to the table
+
+Now depending on what is selected it should dynamically turn the Flag Filter to 1, and we will apply a filter on that
+
+5. Filter your table where Flag Filter = 1
+
+6. remove the measure columns from the table that you don't want to see, so that only the filter logic remains.
+
+
+-----------------------------------------------------
+
+GEtting the max value with a masure
+Whatever you are breaking your measure down by, for example, by location, then you use that in your measure
+
+Max Value = var maxc = CALCULATE(MAXx(Locations,[Change in Sales%]),ALL(Locations))
+return maxc
+
+same or min
+
+-------------------------------------------------------
+
+
+Function notes:
+Weekday()
+6 = Friday
+7 = Saturday
+1 = Sunday
+
+
+
+
+--------------------------------------------------------------------------------
+
+
+Calulate cumulative
+
+Total Cumulative Recoveries (Non Sale, Non Redeem) = 
+CALCULATE(SUM('Rpt vwPowerVI_CollectionsStaticPool'[PrincipalAmt])
+,'Rpt vwPowerVI_CollectionsStaticPool'[SelectableMonthYear]<=MAX('Rpt vwPowerVI_CollectionsStaticPool'[SelectableMonthYear])&&'Rpt vwPowerVI_CollectionsStaticPool'[RecoveryType] = "Payment")
+
+
+------------------------------------------------------------------------------
+
+
+Matrix with counted columns
+
+
+TitleLog Action = COUNTROWS(FILTER(RepoAppr, CONTAINSSTRING(RepoAppr[Call_Disposition__c], SELECTEDVALUE(RepoAppr[Call_Disposition__c]))))
+
+
+
+
+
+
+Create a date range for dimension table
+
+enter data then
+
+Just copy this into power query advanced editor
+
+let
+    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45WMtQ31DcyMDJWio0FAA==", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [DummyDate = _t]),
+    #"Added Custom" = Table.AddColumn(Source, "StartDate", each Date.AddMonths(Date.From(DateTime.LocalNow()),-12)),
+    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"StartDate", type date}}),
+    #"Added Custom1" = Table.AddColumn(#"Changed Type", "EndDate", each Date.From(DateTime.LocalNow())),
+    #"Changed Type1" = Table.TransformColumnTypes(#"Added Custom1",{{"EndDate", type date}}),
+    #"Added Custom2" = Table.AddColumn(#"Changed Type1", "Dates", each {Number.From([StartDate])..Number.From([EndDate])}),
+    #"Expanded Dates" = Table.ExpandListColumn(#"Added Custom2", "Dates"),
+    #"Changed Type2" = Table.TransformColumnTypes(#"Expanded Dates",{{"Dates", type date}})
+in
+    #"Changed Type2"
+
+
+
+
+
+
+Calculating a zscore 
+
+DaysBwfilingclaim mean = 
+
+var Mean = AVERAGEX(FactTransactionData,FactTransactionData[DaybwFilingClaim])
+var stdd = STDEV.P(FactTransactionData[DaybwFilingClaim])
+var zscore = (FactTransactionData[DaybwFilingClaim]-Mean)/stdd
+return Mean
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------
+
+Filter slicers to only show values in visual so no extra selectable items
+Supplier Slicer = CALCULATE([Sales])
+
+
+
+
+standard deviation
+
+
+
+To weight something of extreme::::
+
+smoothed = var smooth1 = if([Change in Sales%]>0,([Change in Sales%]-AVERAGEX('Proj Sales',[Change in Sales%]))/(STDEVX.P('Proj Sales',[Change in Sales%])*3),[Change in Sales%])
+
+var smooth2 = IF(smooth1>0,LOG(smooth1+1,10),IF(smooth1<0,LOG(ABS(smooth1)+1,10)*-1,0))
+var smooth3 = IF(smooth2>0,LOG(smooth2+1,10),IF(smooth2<0,LOG(ABS(smooth2)+1,10)*-1,0))
+var smooth4 = IF(smooth3>0,LOG(smooth3+1,10),IF(smooth2<0,LOG(ABS(smooth2)+1,10)*-1,0))
+var smooth5 = IF(smooth4>0,LOG(smooth4+1,10),IF(smooth2<0,LOG(ABS(smooth2)+1,10)*-1,0))
+var smooth6 = IF(smooth5>0,LOG(smooth5+1,10),IF(smooth2<0,LOG(ABS(smooth2)+1,10)*-1,0))
+var branch = IF(and(smooth5<=.01,smooth5>0),.01,IF(and(smooth4>=-.01,smooth4<0),-.01,smooth4))
+var district = IF(and(smooth4<=.01,smooth4>0),.01,IF(and(smooth3>=-.01,smooth3<0),-.01,smooth4))
+var rm = IF(and(smooth3<=.01,smooth3>0),.01,IF(and(smooth3>=-.01,smooth3<0),-.01,smooth3-.04))
+var vp = IF(and(smooth3<=.01,smooth3>0),.01,IF(and(smooth3>=-.01,smooth3<0),-.01,smooth3))
+var vp_flag = IF(SELECTEDVALUE(Locations[Vice Pres],"X")<>"X","VP","X")
+var rm_flag = IF(SELECTEDVALUE(Locations[Regional Mgr],"X")<>"X","RM","X")
+var district_flag = IF(SELECTEDVALUE(Locations[District],"X")<>"X","DISTRICT","X")
+var branch_flag = IF(SELECTEDVALUE(Locations[Branch],"X")<>"X","BRANCH","X")
+return IF(branch_flag="BRANCH",branch,if(district_flag = "DISTRICT",district,IF(rm_flag="RM",rm,IF(vp_flag="VP",vp,0))))
+
+
+
+
+SEarch function
+
+First 2 = var pos_1 = iferror(SEARCH("-",'Sales Table'[Market Basket]),-1)
+var pos_2 = IFERROR(SEARCH("-",RIGHT('Sales Table'[Market Basket],len( 'Sales Table'[Market Basket])-pos_1)),-1)
+return RIGHT('Sales Table'[Market Basket],len( 'Sales Table'[Market Basket])-pos_2)
+
+
+
+--------------------------------------------------------
+
+
+
+
+months ago
+
+Month Year = var ret = FORMAT(DATE('Dim Broadcast Date'[br_year],'Dim Broadcast Date'[br_month],"01"), "mmm")&" - "&'Dim Broadcast Date'[br_year]
+return IF('Dim Broadcast Date'[fmo]<10,"0"&'Dim Broadcast Date'[fmo]&": "&ret,'Dim Broadcast Date'[fmo]&": "&ret)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------
+
+
+Filter a created table
+
+Prod Bought together = var tab = GROUPBY('Sales Table','Sales Table'[doc_number],'Sales Table'[doc_dbloc],'Sales Table'[doc_product],'Sales Table'[FLag Product])
+return filter(tab,'Sales Table'[FLag Product]="X")
+
+
+
+Backet Analysis
+
+
+In your sales table add a colun
+
+Market Basket = CALCULATE(CONCATENATEX('Sales Table','Sales Table'[doc_product],"-"),
+FILTER(ALL('Sales Table'),'Sales Table'[doc_number]=EARLIER('Sales Table'[doc_number])))
+
+
+Btw, if you want to remove duplicates in teh concatenate, you have to make a new table with the group by
+bc if there are the same products in a ticket that's what creates the duplicates
+
+
+First Three
+First Three = var fir = IF(value('Prod Bought together'[Count Products])<3,"UNDER","OVER")
+var fir_pos = IF(fir="OVER",search("-",'Prod Bought together'[Market Basket All],1,0),len('Prod Bought together'[Market Basket All]))
+var fir_slice = IF(fir="OVER",MID('Prod Bought together'[Market Basket All],fir_pos+1,len('Prod Bought together'[Market Basket All])-fir_pos),'Prod Bought together'[Market Basket All])
+var sec_pos = IF(fir="OVER",search("-",fir_slice,1,0)+fir_pos,len('Prod Bought together'[Market Basket All]))
+var sec_slice = IF(fir="OVER",MID('Prod Bought together'[Market Basket All],sec_pos+1,len('Prod Bought together'[Market Basket All])-sec_pos),'Prod Bought together'[Market Basket All])
+var thir_pos = IF(fir="OVER",search("-",sec_slice,1,0)+sec_pos,len('Prod Bought together'[Market Basket All]))
+return if(fir="UNDER",'Prod Bought together'[Market Basket All],mid('Prod Bought together'[Market Basket All],1,thir_pos-1))
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+count products
+
+
+Bins = var x= [SalesTotal] return
+if(x<=100, "$0-$100",
+if(and(x>100, x<=500), "$100-$500",
+if(and(x>500, x<=1000), "$500-$1,000",
+if(and(x>1000, x<=5000), "$1,000-$5,000",
+if(and(x>5000, x<=10000), "$5,000-$10,000",
+if(and(x>10000, x<=50000), "$10,000-$50,000",
+if(and(x>50000, x<=100000), "$50,000-$100,000",
+if(and(x>100000, x<=500000), "$100,000-$500,000",
+if(and(x>500000, x<=1000000), "$500,000-$1,000,000",
+if(and(x>1000000, x<=5000000), "$1,000,000-$5,000,000",
+if(x>5000000, "$5,000,000+")))))))))))
+
+
+
+if([TotalSalesInStore]+[TotalCustomerSalesOnline])<=100 then "$0-$100" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>100 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=500 then "$100-$500" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>500 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=1000 then "$500-$1,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>1000 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=5000 then "$1,000-$5,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>5000 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=10000 then "$5,000-$10,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>10000 and[TotalSalesInStore]+[TotalCustomerSalesOnline]<=50000 then "$10,000-$50,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>50000 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=100000 then "$50,000-$100,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>100000 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=500000 then "$100,000-$500,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>500000 and [TotalSalesInStore]+[TotalCustomerSalesOnline]<=1000000 then "$500,000-$1,000,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>1000000 and[TotalSalesInStore]+[TotalCustomerSalesOnline]<=5000000 then "$1,000,000-$5,000,000" else if
+[TotalSalesInStore]+[TotalCustomerSalesOnline]>5000000 then "$5,000,000+" else "Error"
+
+
+
+Counts By Period = GROUPBY('EDI Table', 'EDI Table'[per_to],'EDI Table'[Branch], "Total Counts", sumx(CURRENTGROUP(),'EDI Table'[edi_auto_filings]))
+
+creates a new table
+
+
+strip right 3 characters
+
+Customer = var x = len('Docs (2)'[doc_customer])-3
+return if(and(len('Docs (2)'[doc_customer])>6, 'Docs (2)'[doc_customer]<>""),format(left('Docs (2)'[doc_customer],x),"#########"),'Docs (2)'[doc_customer])
+
+
+
+Period_Ago_Desc = if([periods_ago]=0, "00: Current Period", if(and([periods_ago]<10, [periods_ago]>0),"0"&FORMAT([periods_ago], "#")&": "&[period_name],if([periods_ago]>10,FORMAT([periods_ago], "##")&": "&[period_name],if(and([periods_ago]<0, [periods_ago]>-10),FORMAT([periods_ago], "##")&": "&[period_name],if([periods_ago]<=-10,FORMAT([periods_ago], "###")&": "&[period_name])))))
+
+
+
+
+-------------------------------------------------------------------------------------------
+
+averaging for calendar filters on page
+
+TOTAL AVG SALES PER PERIOD = var stdate = CALCULATE(MIN('Period (2)'[per_from]))
+var enddate = CALCULATE(MAX('Period (2)'[per_from]))
+var per_ago = DATEDIFF(stdate,enddate,MONTH)
+return IF(per_ago<1,[TOTAL CUSTOMER SALES],DIVIDE([TOTAL CUSTOMER SALES],per_ago+1,BLANK()))
+
+
+
+copy list of trimmed customer numbers
+
+Customers This Year = DISTINCT(SELECTCOLUMNS(FILTER('Docs (2)',and(LEN('Docs (2)'[doc_customer])>5,'Docs (2)'[Before Jan 1 After 0]=0)),"Customer This Year", LEFT('Docs (2)'[doc_customer],LEN('Docs (2)'[doc_customer])-3)))
+
+
+
+
+
+Loyal Customers = DISTINCT(NATURALINNERJOIN('Customers Past','Customers This Year'))
+
+
+Customers Past = DISTINCT(SELECTCOLUMNS(FILTER('Docs (2)',and(LEN('Docs (2)'[doc_customer])>5,
+'Docs (2)'[Before Jan 1 After 0]=1)),"Customer This Year", LEFT('Docs (2)'[doc_customer],LEN('Docs (2)'[doc_customer])-3)))
+
+Customers This Year = DISTINCT(SELECTCOLUMNS(FILTER('Docs (2)',
+and(LEN('Docs (2)'[doc_customer])>5,'Docs (2)'[Before Jan 1 After 0]=0)),"Customer This Year", 
+LEFT('Docs (2)'[doc_customer],LEN('Docs (2)'[doc_customer])-3)))
+
+
+
+COUNTAX(FILTER('Docs (2)',COUNT('Customer (2)'[cus_short])>1),TRUE())
+var test = CALCULATE(COUNT('Docs (2)'[cus_short])>1)
+return repeat
+
+
+COUNT - simply counts the times the titem appears int eh column TEXT OR NUMBER
+COUNTA - same as count
+COUNTX = counts with a table, not just a column, countx(filter(table,condition),column to count)
+
+
+repeat customer
+
+repeat = IF(CALCULATE(COUNT('Docs (2)'[cus_short]),FILTER('Docs (2)',
+'Docs (2)'[cus_short]='Customer (2)'[customer_no]))<2,0,CALCULATE(COUNT('Docs (2)'[cus_short]),
+FILTER('Docs (2)','Docs (2)'[cus_short]='Customer (2)'[customer_no])))
+
+
+
+
+repeat purch rate = 
+var sum_repeats = CALCULATE(sum('Customer (2)'[repeat]))
+var total = [COUNT OF PURCHASES]
+var test = sum_repeats/total
+return test
+
+
+
+
+TIMES A PRODUCT WAS BOUGHT IN THE PAST TWO MONTHS
+
+TIMES ITEM WAS PURCHASED = var stdate = MAX('Docs (2)'[doc_date])
+var enddate = DATE(year(MAX('Docs (2)'[doc_date])),MONTH(MAX('Docs (2)'[doc_date]))-2,DAY(MAX('Docs (2)'[doc_date])))
+var test = CALCULATE(COUNT('Lines (2)'[doc_l_stockcode]),DATESBETWEEN('Docs (2)'[doc_date],enddate,stdate))
+return test
+
+
+
+
+look up value with multiple rows
+
+analysis_code = CALCULATE(MAX('Product (2)'[pro_analysis]),FILTER(ALL('Product (2)'),'Product (2)'[pro_stockcode]=Items[Items]))
+
+
+
+
+when customers bought item A they also bought item B
+
+
+Purchased Both Products = 
+var total = CALCULATE(DISTINCTCOUNT('Lines (2)'[doc_number]), ALL('Lines (2)'[doc_l_stockcode]))
+return total
+
+
+
+
+
+REPEAT CUSTOMER RATE
+note THE ALLEXCEPT PREVENTS THE TOTAL FROM FILTERING OUT SO YOU CAN USE THAT VARIABLE ACROSS MULTIPLE ROWS
+nm, it doesn't work across rows
+
+repeat purch rate = 
+var sum_repeats = CALCULATE(sum('Customer (2)'[repeat]))
+var total = CALCULATE(COUNTa('Docs (2)'[cus_short]), ALLEXCEPT('Docs (2)','Customer (2)'[cus_short]))
+return sum_repeats/total	
+
+
+
+
+
+
+
+IF(PROd*.9>=PROD, "HIGH",IF(AND(PROD*.8>=PROD,PROD<PROD*.9),"MEDIUM", IF(and(PROD*.7>=PROD,PROD*.8<PROD),"LOW", "VERY LOW")))
+
+
+
+
+add custom column to compute hp 
+"hp", each if [doc_loc]<>[doc_dbloc] then ([doc_l_lgoods2]-[doc_l_lcost2])/2 else 0)
+
+
+HP in use the locations table to identify the type of sumation we are doing with the lines table
+HP IN = IF(HASONEVALUE(Locations[branch_loyalty]),CALCULATE(SUM(Lines[HP]),USERELATIONSHIP(Lines[doc_dbloc],Locations[branch_loyalty])),0)
+
+hp out
+HP OUT = IF(HASONEVALUE(Locations[branch_loyalty]),CALCULATE(SUM(Lines[HP]),USERELATIONSHIP(Lines[doc_loc],Locations[branch_loyalty])),0)
+
+
+
+
+
+iF COLUMN CONTAINS WORD
+
+CREDIT VALUE = CALCULATE(SUM(Lines[doc_l_lgoods2]),FILTER(lines,lines[doc_ims_source]="credit"))
+
+
+NOTE!! manipulating dates in Power BI to get current date and previous date is not the best
+Because Power BI is very glitchy about missing dates etc.
+
+It is best to use SQL.  
+
+SQL is below and you can use that to make your MOM and YOY calculations
+
+note, below is using calendar periods not fiscal periods
+
+
+
+select 
+cal_date "Date",
+DATEFORMAT(cal_date,'YYYY-MM-01') "Start of month",
+DATEDIFF(month, "Start of month",today()) periods_ago,
+year(cal_date) fy,
+DATEDIFF(year,"Start of month", today()) fy_ago 
+from users.calendar
+
+where cal_Date BETWEEN DATEADD(year,-3,TODAY()) AND TODAY()
+
+order by cal_Date desc
+
+
+
+
+
+
+
+
+MOM
+
+MoM Trading Fig Change = DIVIDE([Current Trading Figures]-[Previous Trading Figures],[Previous Trading Figures])
+Current Trading Figures = CALCULATE([Trading Figures])
+Previous Trading Figures = CALCULATE([Trading Figures],PREVIOUSMONTH('Period (2)'[per_to]))
+Trading Figures = CALCULATE(SUM(Renovo[amount]))  <-- sales
+
+
+ 
+
+Last YEar values
+
+CALCULATE([Sales],SAMEPERIODLASTYEAR(Period[fiscal]),ALLEXCEPT(period,Period[fiscal]))
+
+
+
+
+
+
+YOY
+
+it is VERY difficult to get this to work properly so I suggest getting the previous periods 12 periods ago value in SQL
+raather than Power BI just to make your life easier
+
+remember to aggregate everything so there isn't a cartesian join when you left join
+
+Example:
+
+past as (
+
+
+select 
+
+doc_loc,
+doc_dbloc,
+doc_type,
+goods,
+cost,
+doc_supplier,
+periods_ago-12 past_period
+from report
+
+)
+
+
+select 
+
+report.doc_loc,
+report.doc_dbloc,
+report.doc_type,
+report.goods curr_goods,
+past.goods past_goods,
+report.cost,
+report.doc_supplier,
+report.periods_ago
+from report
+
+left join past on (
+report.doc_dbloc = past.doc_dbloc
+and report.doc_loc = past.doc_loc
+and report.doc_supplier = past.doc_supplier
+and past_period = periods_ago
+
+)
+
+
+
+
+
+
+
+Amount YTD = 
+CALCULATE(
+    [Sales $]+0,
+    FILTER(ALL(Periods),AND(Periods[fy]=MAX(Periods[fy]),Periods[per_period]<=MAX(Periods[per_period])))
+    )
+
+Amount YTD LY = 
+CALCULATE(
+    [Sales $]+0,
+    FILTER(ALL(Periods),AND(Periods[fy]=MAX(Periods[fy])-1,Periods[per_period]<=MAX(Periods[per_period])-100))
+    )
+
+
+Amount YTD YoY% = 
+VAR yoy = 
+    DIVIDE(Amounts[Amount YTD]-Amounts[Amount YTD LY],Amounts[Amount YTD LY],BLANK())
+VAR sign = 
+    IF(yoy<0,-1,1)
+RETURN 
+    sign*ABS(yoy)
+    
+
+
+
+for contintional formattin
+
+JOB NUMBER FLAG = VAR jobnum = SELECTEDVALUE('Credit and Cash'[JOBNUMBER_FLAG])
+return
+SWITCH(TRUE(),
+jobnum = "JOBNUMBER FLAG",1,jobnum<>"JOBNUMBER FLAG",0)
+
+
+
+
+BASIC switch FOR FORMATTING VALUES
+
+
+JOB NUMBER FLAG = VAR jobnum = SELECTEDVALUE('Credit and Cash'[JOBNUMBER_FLAG])
+return
+SWITCH(TRUE(),
+jobnum = "Y",1,jobnum<>"",0)
+
+
+
+
+
+MAKE A PIE CHART WITH ONE COLUMNS VALUES EX. ANALYSIS OR SOME KIND OF CATEGORIED THING
+
+1. MAKE YOUR SWITCH STATMENT THAT TOGGLES THE VALUES YOU'RE APPLYING TO THE PIE CHART, OR JUST PUT WHATEVER
+SUMED TYPE OF VALUE IN THE 'VALUES' FIELD OF THE PIE CHART
+
+2. PUT THE COLUMN WITH THE VALUES IN THE DETAILS FIELD
+
+NOTE YOU ONLY NEED ONE SWITCH TOGGLE FOR THE PIE CHARTS
+
+
+FOR PIE CHARTS AND BAR CHARTS
+
+SELECTED VALUE = IF(ISCROSSFILTERED(TOPNITEMS[TOPNCAT]),
+SWITCH(TRUE(),
+VALUES(TOPNITEMS[TOPNCAT])="Sales",[ITEM TOTAL],
+VALUES(TOPNITEMS[TOPNCAT])="GP$",'ITEM CALC'[ITEM GP $],
+VALUES(TOPNITEMS[TOPNCAT])="GP%",'ITEM CALC'[ITEM GP %],
+VALUES(TOPNITEMS[TOPNCAT])="QTY BOUGHT",[QTY BOUGHT],
+VALUES(TOPNITEMS[TOPNCAT])="TIMES BOUGHT",[Times Bought],
+[ITEM TOTAL]),[ITEM TOTAL])
+
+
+
+
+
+FILTER BASED ON - TOGGLE
+
+MAKE A LITTLE TABLE WITH THE NAMES OF TOGGLE VALUES, AND CORRESPONDING INDEX NUMBERS
+
+----------------------------------------------------------------------------------------
+
+MAKE A MEASURE WITH 
+
+A SWITCH STATMENT  
+AND HAVE A FILTER ON 1
+
+---------------------------------
+
+NEXT YOU NEED A MEASURE THAT ASSIGNES VALUES TO VALUES IN COLUMN THAT IS IN YOUR TABLE
+
+-----------------------------------------------------------
+
+CREATE YOUR SLICER WITH THE TOGGLE TABLE VALUES
+
+--------------------------------------------------------------------------
+
+SWITCH FILTER ON YOUR FILTERS
+
+
+FY SWITCHER = 
+VAR SELECTION = SELECTEDVALUE(FYTOGGLE[FYTOGGLEVALUE])
+VAR flag = SELECTEDVALUE('Credit and Cash'[FY])
+
+return
+SWITCH(TRUE(), SELECTION="PREVIOUS",
+SWITCH(TRUE(),
+flag = "LAST",1,flag ="THIS",0),
+
+SELECTION="CURRENT",SWITCH(TRUE(),
+flag = "LAST",0,flag ="THIS",1),
+
+SELECTION = "BOTH", SWITCH(TRUE(),
+flag = "LAST",1,flag ="THIS",1))
+
+
+-------------------------------------------------------
+
+THEN YOU JUST DROP THAT MEASURE INTO YOUR TABLE AND 
+FILTER ON 1, REMOVE THE COLUMN SO IT DOESN'T SHOW UP ON YOUR TABLE
+
+
+
+
+----------------------------------------------------------------------------
+
+
+
+To make one measeure the same color as another measure use the switch true function
+set the field value to your switch measure
+
+test = 
+SWITCH(TRUE(),
+[Change in Sales%]>100,"#5D8A58",
+and([Change in SALES%]<=100,[Change in SALES%]>90),"#628E5D", 
+and([Change in SALES%]<=90,[Change in SALES%]>80),"#689263", 
+and([Change in SALES%]<=80,[Change in SALES%]>70),"#6E9669", 
+and([Change in SALES%]<=70,[Change in SALES%]>60),"#749A6F",
+and([Change in SALES%]<=60,[Change in SALES%]>50),"#799E75", 
+and([Change in SALES%]<=50,[Change in SALES%]>40),"#7FA37B", 
+and([Change in SALES%]<=40,[Change in SALES%]>30),"#85A781", 
+and([Change in SALES%]<=30,[Change in SALES%]>20),"#8BAB87", 
+and([Change in SALES%]<=20,[Change in SALES%]>10),"#91AF8D", 
+and([Change in SALES%]<=10,[Change in SALES%]>9),"#96B393",
+and([Change in SALES%]<=9,[Change in SALES%]>8),"#9CB799",
+and([Change in SALES%]<8,[Change in SALES%]>7),"#A2BC9F",
+and([Change in SALES%]<=7,[Change in SALES%]>6),"#A8C0A5",
+and([Change in SALES%]<=6,[Change in SALES%]>5),"#AEC4AB",
+and([Change in SALES%]<=5,[Change in SALES%]>4),"#B3C8B1",
+and([Change in SALES%]<=4,[Change in SALES%]>3),"#B9CCB7",
+and([Change in SALES%]<=3,[Change in SALES%]>2),"#BFD0BD",
+and([Change in SALES%]<=2,[Change in SALES%]>1),"#C5D5C3",
+and([Change in SALES%]<=1,[Change in SALES%]>.75),"#CBD9C9",
+and([Change in SALES%]<=.75,[Change in SALES%]>.5),"#D0DDCF",
+and([Change in SALES%]<=.5,[Change in SALES%]>.25),"#D6E1D5",
+and([Change in SALES%]<=.25,[Change in SALES%]>.10),"#DCE5DB",
+and([Change in SALES%]<=.10,[Change in SALES%]>0),"#E2E9E1",
+and([Change in SALES%]<=0,[Change in SALES%]>-.05),"#F1DEDE",
+and([Change in SALES%]<=-.05,[Change in SALES%]>-.1),"#E5C2C2",
+and([Change in SALES%]<=-.1,[Change in SALES%]>-.15),"#D9A5A5",
+and([Change in SALES%]<=-.15,[Change in SALES%]>-.25),"#CD8989",
+and([Change in SALES%]<=-.25,[Change in SALES%]>-.5),"#C06C6C",
+and([Change in SALES%]<=-.5,[Change in SALES%]>-.75),"#B45050",
+and([Change in SALES%]<=-.75,[Change in SALES%]>-1),"#A83333",
+[Change in SALES%]<=-1,"#9C1717",
+"#fff")
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
+
+
+IF YOU HAVE DIFFERENT VALUES YOU WANT TO SHOW IN ROWS AND CALCULATE EACH COLUMN ACCORDING TO THOSE ROWS YOU CAN
+CREATE A TABLE WITH THAT ''NAMES'' OF THE ROWS TO WANT TO CREATE THE VALUE FOR 
+THEN USE THE BELOW DAX TO CALCULATE ACCORDINGLY
+
+INVOICE COST IN = 
+var INV_INNER = IF(HASONEVALUE(Location[branch_loyalty]),CALCULATE(CALCULATE(SUM(Doc[cost]),FILTER(Doc,Doc[INTER]="INVOICE DB/OUTER")),USERELATIONSHIP(Doc[docdbloc],Location[branch_loyalty])),0)
+VAR INV_OUTER = IF(HASONEVALUE(Location[branch_loyalty]),CALCULATE(CALCULATE(SUM(Doc[cost]),FILTER(DOC,Doc[INTER]="INVOICE DB/OUTER")),USERELATIONSHIP(Doc[DocLoc],Location[branch_loyalty])),0)
+var CRE_INNER = IF(HASONEVALUE(Location[branch_loyalty]),CALCULATE(CALCULATE(SUM(Doc[cost]),FILTER(Doc,Doc[INTER]="CREDIT DB/OUTER")),USERELATIONSHIP(Doc[docdbloc],Location[branch_loyalty])),0)
+VAR CRE_OUTER = IF(HASONEVALUE(Location[branch_loyalty]),CALCULATE(CALCULATE(SUM(Doc[cost]),FILTER(Doc,Doc[INTER]="CREDIT DB/OUTER")),USERELATIONSHIP(Doc[DocLoc],Location[branch_loyalty])),0)
+var WEBFUL = if(CALCULATE(SUM(Web[cost]),FILTER(Web,Web[Web]="Webfullfilment"))=blank(),0,CALCULATE(SUM(Web[goods]),FILTER(Web,Web[Web]="Webfullfilment")))
+VAR ONLINE = if(CALCULATE(SUM(Web[cost]),FILTER(Web,Web[Web]="Online Sale"))=blank(),0,CALCULATE(SUM(Web[goods]),FILTER(WEb,Web[Web]="Online Sale")))
+RETURN
+
+IF(SELECTEDVALUE(DB[DB])="INVOICE DB/INTER",INV_inner,
+IF(SELECTEDVALUE(DB[DB])="INVOICE DB/OUTER", INV_OUTER,
+IF(SELECTEDVALUE(DB[DB])="CREDIT/DB INTER",CRE_inner,
+IF(SELECTEDVALUE(DB[DB])="CREDIT/DB OUTER", CRE_OUTER,
+IF(SELECTEDVALUE(DB[DB])="CASH/DB INTER",WEBFUL,
+IF(SELECTEDVALUE(DB[DB])="CASH/DB OUTER", ONLINE,
+BLANK()))))))
+
+
+
+----------------------------------------------------------------------
+
+using rankx
+
+RankR90 =
+RANKX(
+    ALLSELECTED('Charge Off Collections'),
+    CALCULATE(
+    [PointsForRankR90],
+    ALLEXCEPT('Charge Off Collections','Charge Off Collections'[Operator Name], 'Charge Off Collections'[Team Name])
+    ),
+    ,
+    desc,
+    Dense)
+ 
+
+when ranking doesn't work right.  whatever you are filtering by, for example Team Name, has to be included in the dax function or else it won't rank
+dynamically
+
+
+
+
+
+
+
+-------------------------------------------------------------------------
+
+RANKING
+
+RANK MOM CATALOGUE = 
+var selection = SELECTEDVALUE(TOPNITEMS[TOPNVALUES])
+
+RETURN
+    SWITCH (
+        Selection,
+        1, RANKX ( ALLNOBLANKROW ( CATALOGUE[pro_catalog] ), [MOM ITEM SALES] ),
+        2, RANKX ( ALLNOBLANKROW ( CATALOGUE[pro_catalog] ), [MOM GP$ ITEM] ),
+        4, RANKX ( ALLNOBLANKROW ( CATALOGUE[pro_catalog] ), [MOM ITEM SALES] ),
+        5, RANKX ( ALLNOBLANKROW ( CATALOGUE[pro_catalog] ), [MOM ITEM SALES] ),
+        RANKX ( ALLNOBLANKROW ( CATALOGUE[pro_catalog] ), [MOM ITEM SALES] )
+    )
+
+
+THIS IS THE SWITCH
+
+
+
+THEN YOU PUT THIS IN THE FILTER PANE
+
+
+
+----------------------------------------------------------------
+
+
+lookupvalue
+
+
+
+
+
+
+using selectedvaue as a left join or lookup
+
+TOP 20 MOM CAT = IF([RANK MOM CATALOGUE]<21,1,0)
+
+SET TO 1
+
+
+
+
+
+selectable current previous period
+
+Selected Period = var cur_period = SELECTEDVALUE(Lines[IMS Period])
+var periods_ago = CALCULATE(VALUES(Lines[periods_ago]),FILTER(Lines,Lines[IMS Period] = cur_period))
+var calcu =CALCULATE([Goods],FILTER(Lines,Lines[periods_ago]=periods_ago))
+return calcu
+
+
+
+CUSTOMER
+Previous Period v2 = var cur_period = CALCULATE(SELECTEDVALUE(Lines[IMS Period]))
+var per_ago = CALCULATE(VALUES(Lines[periods_ago]),FILTER(Lines,Lines[IMS Period] = cur_period))
+var periods_ago = per_ago + 1
+var calcu = CALCULATE([Goods],FILTER(ALLEXCEPT(Lines,Lines[Customer]),Lines[periods_ago]=periods_ago))
+return calcu
+
+
+DYNAMIC HEADERS
+use a card to overlay the table column header you want to change
+
+Customer Goods Header = var selected = SELECTEDVALUE(Lines[IMS Period]) return "Period: "&IF(isblank(selected),"Current", selected)
+
+
+Customer Goods Prev = var selected = SELECTEDVALUE(Lines[IMS Period]) 
+var per_ago = CALCULATE(VALUES(Lines[periods_ago]),FILTER(Lines,Lines[IMS Period] = selected))
+var periods_ago = per_ago + 1
+var prev_per = CALCULATE(VALUES(Lines[IMS Period]), FILTER(all(Lines),Lines[periods_ago]=periods_ago))
+return "Period: "&IF(isblank(prev_per),"Previous Period", prev_per)
+
+
+
+--------------------------------------------------------------------------------------------------------
+
+
+
+Making Swing % more relavant
+
+Make a new table that you will base your groupings off of
+
+ie.  branches
+
+btw the relationship bw the new table and the one you're getting your calculations form have to be inactive
+
+preform base calculations for each column
+
+Avg Current Week = CALCULATE(AVERAGE(archived[Total]), filter(archived,archived[Days Ago]>0),filter(archived,archived[Days Ago]<8),USERELATIONSHIP(archived[dly_loc],Swings[dly_loc]))
+
+
+
+--------------------------------------------------------------------------
+
+calculate distinct group by new tables
+
+% ADJ VALUE MONTHLY = ,"IZE('SKUs Counted','SKUs Counted'[cyc_l_loc],'SKUs Counted'[cyc_date],'SKUs Counted'[per_period],'SKUs Counted'[cyc_l_doc],"STOCK START VALUE",SUM('SKU START QTY'[cyc_startstock]),"STOCKFINAL VALUE",sum('SKUs Counted'[cyc_finalstock]),"% ADJ VALUE", [% ADJ VALUE (TOTAL)])
+
+
+
+
+how to rank by subcategories
+
+make your table with the categories you want to rank over - you can use group by
+
+make a column to concatenate all the values
+
+ID = 'Cycle Count Reset'[FY]&"_"&'Cycle Count Reset'[warehouse]&"_"&'Cycle Count Reset'[cyc_l_location]
+
+use rankx and filter by that concatenated column
+
+COUNT X = RANKX(FILTER('Cycle Count Reset','Cycle Count Reset'[ID]=EARLIER('Cycle Count Reset'[ID])),'Cycle Count Reset'[cyc_l_doc] ,,asc)
+
+
+
