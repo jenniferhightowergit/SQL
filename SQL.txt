@@ -1,0 +1,1138 @@
+
+
+CONVERT(DATE, cast(tb.duedatekey AS VARCHAR)))
+
+
+
+ CONVERT(DATE, cast(l.RowCreatedDate AS VARCHAR))
+
+
+--different date filters
+
+--first day of next month
+declare @StartDate date = DATEADD(DAY,1,EOMONTH(DATEADD(MONTH,0, GETDATE()-1)))
+
+
+--last day of next month
+declare @StartDate date = eomonth(cast(dateadd(month, 1, getdate()) as date))
+
+
+--first day of current month
+declare @StartDate date = DATEADD(DAY,1,EOMONTH(DATEADD(MONTH,-1, GETDATE()-1)))
+
+
+--last day of current month
+declare @StartDate date = eomonth(cast(dateadd(month, 0, getdate()) as date))
+
+
+
+--first day of previous month
+select dateadd(day,1,eomonth(cast(dateadd(month, -2, getdate()) as date)))
+
+--last day of previous month
+declare @StartDate date = eomonth(cast(dateadd(month, -1, getdate()) as date))
+
+
+
+
+--yesterday
+declare @EndDate date = dateadd(day, -1, CAST(GETDATE() AS DATE))
+
+
+
+PRD-AWSSQL01.titlemax.com
+
+
+
+CREATING STORED PROCEDURES
+
+
+declare @StartDate date = dateadd(day, -90, getdate())
+declare @EndDate date = dateadd(day, -1, getdate())
+
+Declare @StartDateKey int  =  FORMAT(@StartDate, 'yyyyMMdd')
+Declare @EndDateKey int  =  FORMAT(@EndDate, 'yyyyMMdd')
+
+
+
+------------------------------------------------------declare variables with select statement
+
+
+DECLARE @StartDate DATE 
+DECLARE @EndDate DATE
+
+select @StartDate = min(call_date) from bidwsandbox.Rpt.LCCommCamp lc (nolock)
+select @enddate = max(call_date) from bidwsandbox.Rpt.LCCommCamp lc (nolock)
+
+select @StartDate, @EndDate
+
+
+
+
+
+
+
+
+declare @StartDate date
+declare @EndDate date
+
+set @StartDate = cast(DATEADD(month,-3,GETDATE()) as date)
+set @EndDate = cast(GETDATE() as date)
+
+
+
+Declare @BeginDateKey int  =  FORMAT(dateadd(day, -90, getdate()), 'yyyyMMdd')
+Declare @EndDateKey int  =  FORMAT(dateadd(day, -1, getdate()), 'yyyyMMdd')
+
+and campaigndatekey BETWEEN @BeginDateKey AND @EndDateKey 
+
+
+
+startofmonth
+
+dateadd(month, datediff(month,0,(CONVERT(DATE, cast(tb.duedatekey AS VARCHAR)))),0) 
+
+
+LAst day of month for previous month
+CONVERT(VARCHAR(10),EOMONTH(DATEADD(MONTH,-1,d.CalendarDate)),112) AS StartingBalDateKey
+
+
+
+--use to filter dates and datekey
+DROP TABLE IF EXISTS #TempDate
+SELECT DateKey, CalendarDate
+INTO #TempDate
+FROM EIS.Dim.Date
+WHERE DateKey BETWEEN @StartDate AND @EndDate
+
+
+
+
+
+-----------------------------------------------------
+
+
+Datatype conversion issues
+
+--check
+select [PayAmount],* from [EIS].[Borrower].[BorrowerIncome] where ISNUMERIC([PayAmount])<>1
+
+
+
+
+
+
+
+
+
+
+
+
+
+recursive cte--------------------------------------------------devoting a section to this
+
+https://builtin.com/data-science/recursive-sql
+
+simple example of how it works
+
+
+WITH R AS (SELECT 1 AS n)
+SELECT n + 1 FROM R
+
+results with 2
+
+
+----------------------------
+
+expaination:
+
+with r as (
+base_query -- base or archor member
+
+union all
+
+resursive_query involving --recursive member; references r
+)
+
+select * from r
+
+
+
+example I learned from SCott's query
+
+
+drop table if exists #ecommLoanSchedule
+
+
+Go
+with loanSchedule (pmtNumber, PaymentsCnt, FirstIntallmentDueDate, InstallmentDueDate, loanId, daysbetweenPmts, pmtAmt)
+as
+
+(
+	select o1.pmtNumber, paymentsCnt, FirstInstallmentDueDate, InstallmentDueDate, o1.LoanId, o1.daysbetweenpmts, 
+	case when stateCode = 'TX' then (td.TransAmt/PaymentsCnt) + (LoanAmt * ( (9.95/100)/(365/daysbetweenPmts) )) / ( 1 - POWER( 1 +  ( (9.95/100)/(365/daysbetweenPmts) ), -1 * paymentsCnt) ) else 
+				(LoanAmt * ( (InterestApr/100)/(365/daysbetweenPmts) )) / ( 1 - POWER( 1 +  ( (InterestApr/100)/(365/daysbetweenPmts) ), -1 * paymentsCnt) )
+		end as  pmtAmt
+		from
+		(
+		select Distinct 1 pmtNumber, PaymentsScheduledCnt paymentsCnt, convert(date,CAST(FirstInstallmentDueDateKey as varchar),112) FirstInstallmentDueDate, 
+			convert(date,CAST(FirstInstallmentDueDateKey as varchar),112) InstallmentDueDate, l.loanId,
+			case when l.PaymentsScheduledCnt > 1 then DATEDIFF(Day, convert(date,CAST(FirstInstallmentDueDateKey as varchar),112), convert(date,CAST(l.MaturityDateKey  as varchar),112))/(PaymentsScheduledCnt-1) else 30 end daysbetweenPmts,
+			l.InterestApr, l.LoanAmt, l.InterestRate, l.LienFeeAmt, l.FirstPaymentAmt, sp.StateCode
+			from EIS.Loan.Loan l (nolock)
+			join EIS.dim.StoreProduct sp (nolock) on l.StoreProductId = sp.StoreProductId
+			join #latePopulation lp on l.loanId = lp.loanId
+			where lp.Channel = 'Ecomm'
+			and l.PaymentsScheduledCnt > 1
+		) o1
+		left join 
+		(select loanId, transAmt from EIS.Fin.TransactionDetail td1 (nolock) 
+		join EIS.dim.TransactionCode tc (nolock) on td1.TransCodeId = tc.TransCodeId and tc.TransCategory = 'New Loan' and tc.TransCode = 'CSO Fee Total') td on o1.LoanId = td.LoanId
+
+		--above results
+
+		---1	5	2022-09-01	2022-09-01	33946062	30	111.000477	20230929	NULL	20220901
+		
+	-----------recursive CTE
+	union all
+	
+	select 
+	--counts using above statement from pmtNumber to PAymentsCnt
+	pmtNumber + 1 pmtNumber, 
+	PaymentsCnt, 
+	FirstIntallmentDueDate, 
+	--creating a payments schedule below
+	DATEADD(day, (pmtNumber) * daysbetweenPmts,FirstIntallmentDueDate) InstallmentDueDate , 
+	loanId
+	, daysbetweenPmts, 
+	pmtAmt
+	from loanSchedule ls
+	--you need the below or else you will get this error: The statement terminated. The maximum recursion 100 has been exhausted before statement completion.
+
+	where pmtNumber < PaymentsCnt 
+
+
+
+
+	----------------------------
+
+)
+
+
+
+--select * from loanSchedule ls where loanid = 33946062
+	--wthe union in the cte will result here, you have to run it this way or else you will get a select error
+
+
+--1	5	2022-09-01	2022-09-01	33946062	30	111.000477	
+--2	5	2022-09-01	2022-10-01	33946062	30	111.000477
+--3	5	2022-09-01	2022-10-31	33946062	30	111.000477	
+--4	5	2022-09-01	2022-11-30	33946062	30	111.000477	
+--5	5	2022-09-01	2022-12-30	33946062	30	111.000477
+
+
+
+
+
+select *,
+--creating new columns with the info we have
+isnull(cast(convert(varchar,Lead(ls.InstallmentDueDate) over (partition by loanId order by installmentdueDate),112) as int), 20230929) NextInstallmentdueDateKey,
+cast(convert(varchar,lag(ls.InstallmentDueDate) over (partition by loanId order by installmentdueDate),112) as int) PrevInstallmentdueDateKey,
+cast(convert(varchar,ls.InstallmentDueDate,112) as int) InstallmentDueDateKey
+--into #ecommLoanSchedule 
+from loanSchedule ls
+where loanid = 33946062
+
+--results in
+
+--1	5	2022-09-01	2022-09-01	33946062	30	111.000477	20221001	NULL	20220901
+--2	5	2022-09-01	2022-10-01	33946062	30	111.000477	20221031	20220901	20221001
+--3	5	2022-09-01	2022-10-31	33946062	30	111.000477	20221130	20221001	20221031
+--4	5	2022-09-01	2022-11-30	33946062	30	111.000477	20221230	20221031	20221130
+--5	5	2022-09-01	2022-12-30	33946062	30	111.000477	20230929	20221130	20221230
+
+
+---end of recursive SQL lesson
+
+
+
+
+
+
+
+SQL optimization notes:
+
+1.avoid using distinct, instead list the unique columns
+get in the habit of using row over to count duplicate rows until you have no duplicates
+this will help with cartitian joins
+
+
+PRD-AWSSQL01.titlemax.com
+
+
+CREATE A TEMP TABLE
+
+drop table if exists #temp
+
+SELECT
+COLMN1,
+COLUMN2,
+COLUMN3
+
+INTO #TEMP
+
+FROM WHATVER TABLE
+
+WHERE PARAMETERS
+
+SELECT * FRO #TEMP
+
+
+
+
+
+Getting decimals from whole numbers
+
+round(cast(curr.LoanLeft as float)/cast(curr.LoanCnt as float),5),
+
+
+
+
+Using having
+
+
+
+select 
+top 100
+m.Date
+,m.Lot
+,m.Channel
+,m.LoanId
+,m.SlowFilePrincipalAmt
+,m.SlowFileTotalAmt
+,m.CuredOfStartingCnt
+,m.CuredOfStartingPrincipalAmt
+,m.CuredOfStartingTotalAmt
+,m.MaxEndBalDate
+, l.DisplayLoanNumber
+, l.LoanAmt
+FROM BIDWSandbox.dbo.ML_PLSlowFileBalance_MTD m (NOLOCK)
+
+
+
+LEFT JOIN EIS.Loan.Loan l (NOLOCK) ON l.LoanId = m.LoanId
+
+where 1=1
+and DisplayLoanNumber = '39189-1520-76355483'
+and exists (select max(b.date), b.loanid from BIDWSandbox.dbo.ML_PLSlowFileBalance_MTD b 
+where b.loanid = m.LoanId  group by b.LoanId having max(b.date) = m.date) 
+
+
+
+
+
+
+
+USE BIDWSandbox
+CREATE TABLE Persons (
+    PersonID int,
+    LastName varchar(255),
+    FirstName varchar(255),
+    Address varchar(255),
+    City varchar(255)
+);
+
+--USE BIDWSandbox
+--CREATE TABLE table_name (
+--    PersonID int,
+--    LastName varchar(255),
+--    FirstName varchar(255),
+--    Address varchar(255),
+--    City varchar(255)
+--);
+
+
+
+--just making this temp for example purposes
+
+
+
+
+DELETE FROM BIDWSandbox.Fact.KPI_ContactCenterLeadsByAgent_testv2 WHERE DateKey BETWEEN @StartDate AND @EndDate
+
+
+
+INSERT INTO BIDWSandbox.Fact.KPI_ContactCenterLeadsByAgent_testv2 (
+
+DateKey,
+EmployeeNumber,
+EmployeeFullName,
+LeadsWorked,
+LeadsTaskWorked,
+LeadsFunded,
+LeadsFundedAmount,
+WarmTransfer,
+WarmTransferFunded,
+WarmTransferFundedAmount,
+AALeadsFunded,
+AAWarmTransfer,
+LoanType,
+ApptKept)
+
+select * from table
+
+
+
+TRUNCATE TABLE Persons;
+
+INSERT INTO Persons 
+select * from table_name
+
+
+
+EXEC [Rpt].[spGetSSRS_KPICollectionsDashBoard] '10/01/2022','11/10/2022','All Teams'
+
+
+
+
+
+formating cell numbers
+
+replace(replace(replace(Cell_Phone__c,'(',''),') ',''),'-','')  CellPhoneuse BIDWSand
+
+
+
+
+
+
+
+Notes for SQL:
+
+REPLACE('SQL Tutorial', 'T', 'M')									SQL MuMorial
+ROW_NUMBER() OVER(PARTITION BY cus_code ORDER BY cus_modified DESC) as AccountRowNumber			Removes duplicates by selecting the 
+WHERE AccountRowNumber=1										most recently modified version of the customer code
+convert(date,getdate())											Today's date
+WHERE pur_date BETWEEN DATEADD(month,-12,getdate()) AND getdate()
+DATEADD(month,-1,getdate()) AND getdate()	
+					From today's date, back x months or years
+INNER JOIN users.period ON (dly_date BETWEEN per_from AND per_to)
+LEAD(return_value ,offset [,default]) 								o
+OVER (
+    [PARTITION BY partition_expression, ... ]
+    ORDER BY sort_expression [ASC | DESC], ...
+)
+
+sum(abs(td.TransAmt)) over(partition by tb.duedatekey order by td.TransBusinessDate asc) AmtPaid,
+
+ CONVERT(DATE, cast(l.RowCreatedDate AS VARCHAR))
+
+
+datekey BETWEEN FORMAT(dateadd(day,-90,getdate()),'yyyyMMdd') AND FORMAT(dateadd(day,-1,getdate()),'yyyyMMdd'))
+
+
+
+do a leftish type join where the date is the max sequential date in the table 
+outer apply (select top 1 * from EIS.Fin.TrialBalance tb (NOLOCK) where l.Loanid=tb.Loanid order by tb.TrialBalanceDateKey desc) tb2
+
+
+
+getting rid of duplicates with a join
+
+
+join (
+select
+row_number() over(partition by loanid order by sourcemodifieddate desc) rn,
+sourcemodifieddate,
+loanid, 
+TitleLogStatusId 
+from EIS.loan.TitleLog (nolock) 
+) tl on (tl.loanid = l.loanid and rn = 1)
+
+
+
+
+
+Cleaning up numeric columns that have varchars in them
+
+select 
+top 100 
+cast((case when ISNUMERIC(isnull(PrimaryPhone_PhoneNumber,0)) = 0 then '0' else isnull(PrimaryPhone_PhoneNumber,'0') end) as bigint) PrimaryPhone,
+--or if you are having issues with data conversion type errors
+try_parse((case when ISNUMERIC(isnull(PrimaryPhone_PhoneNumber,0)) = 0 then '0' else rtrim(ltrim(isnull(PrimaryPhone_PhoneNumber,'0'))) end) as bigint) PrimaryPhone,
+PrimaryPhone_PhoneNumber,
+cast((case when ISNUMERIC(isnull(SecondaryPhone_PhoneNumber,0)) = 0 then '0' else isnull(SecondaryPhone_PhoneNumber,'0') end) as bigint) SecondaryPhone,
+SecondaryPhone_PhoneNumber,
+BorrowerNumber,
+LoanNumber,
+DisplayLoanNumber,
+BusinessDateKey 
+from SBT.dbo.ODS_LoanDetails
+
+
+
+COncatonate everything in one line list it out
+
+select top 50
+TitleLogId,
+SUBSTRING( ( SELECT ',' + ColumnName AS 'data()' FROM tablename FOR XML PATH('') 
+), 2 , 9999) As Note
+from tablename
+
+group by TitleLogId
+
+
+
+
+
+adding index in search statement
+
+select * from Eis.Fin.TransactionDetail t with (INDEX = CCI_Fin_TransactionDetail,NOLOCK)
+
+
+
+
+creating functions
+
+
+
+CREATE FUNCTION dbo.Remove_SpecialCharacters( @str VARCHAR(MAX))
+RETURNS VARCHAR(MAX) AS
+BEGIN
+DECLARE @expres  VARCHAR(50) = '%[~,@,#,$,%,&,*,(,),.,!]%'
+
+WHILE PATINDEX( @expres, @str ) > 0
+SET @str = Replace(REPLACE( @str, SUBSTRING( @str, PATINDEX( @expres, @str ), 1 ),''),'-',' ')
+RETURN @str
+END;
+go
+
+
+
+
+dealing with data type conversion issues
+
+strings to numbers or date - if the row has an issue converting then it will return a null
+
+select 
+--top 10 
+*,
+isnumeric(PrimaryPhone2) primcheck2,
+isnumeric(SecondaryPhone2) Secondarycheck2
+,
+try_parse(PrimaryPhone2 as bigint) PrimaryPhone,
+try_parse(SecondaryPhone2 as bigint) SecondaryPhone
+from #customerdata
+--where rn=59
+
+order by rn 
+
+
+
+
+
+
+RUNNING TOTALS
+SELECT date, revenue,
+    SUM(revenue) OVER (
+      ORDER BY date
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) running_total
+FROM sales
+ORDER BY date;
+
+SAME THING
+SELECT date, revenue,
+    SUM(revenue) OVER (
+      ORDER BY date) running_sum
+FROM sales
+ORDER BY date;
+
+
+ROLLING AVERAGE PAST N DAYS FROM A ROWS DATE
+
+AVG(Amountcolumn) OVER(order by t.BusinessDate rows between 6 preceding and current row) as OpeningInventory
+
+
+RANK() OVER (ORDER BY Rate DESC) AS RankBySalary 
+
+
+
+
+select * from (
+
+select 
+--top 100000
+--*
+--loanid,
+rootloanid,
+--count(DisplayLoanNumber) loan#
+displayloannumber,
+row_number() over(partition by rootloanid order by rootloanid, displayloannumber asc) rn
+from eis.Loan.Loan
+where 1=1
+--and DisplayLoanNumber='37689-13204-66012747'
+--and loanid = 33095807
+and rootloanid = 9706281
+
+--group by rootloanid
+
+) t1
+
+where 1=1
+--and loan#>1
+
+
+-----------------------------------------------------------------
+
+drop table if exists #StoreCallsLog
+select cast(l.[Time Start] as date) DateCalled, * into #StoreCallsLog
+from StoreCallsLog.dbo.StoreCallsLog l
+
+ 
+
+create index idx_StoreCallLogs_TimeStart on #StoreCallsLog (DateCalled, [Dialed Number])
+
+Note create the index on columns used in a join later
+
+
+------------------------------------------------------------------------------------
+
+Return the first non null value in a list of column values
+wx coalesce(column1, column2, colmn3) "new_coluumnName"
+
+
+
+
+randomly select a whole number between 0 and 50
+floor(rand()*(50-0+1)+0) test,
+
+floor(rand()*(12-1+1)+1) rand_month,
+
+
+RANDOM NUMBER ASSIGNMENT
+
+Example
+
+drop table if exists #RandPool
+select 
+rndtest,
+loanid,
+       BusinessDateKey,
+       ChargeOffDateKey, 
+       SeedLoanId,
+       ChildDisplayLoanNumber,
+       CurrentLoanStatus,
+       borrowerid,
+       TotalDue,
+       SourceCreatedDate,
+       CreateDateKey
+
+into #RandPool
+from #LatestChildLoan lc
+
+inner join (
+select 
+distinct
+ABS(CHECKSUM(NewId())) rndtest,   ---RANDOM UNIQUE NUMBER GENRATOR
+loanid loanid_rand
+
+from #LatestChildLoan
+) randomize on (loanid_rand = lc.loanid)
+
+
+
+
+Find index in string
+
+
+with mystring as (
+select
+'This is a string its only a string' strg,
+patindex('%only%', 'This is a string its only a string') full_pos, --returns 15
+charindex('only', 'This is a string its only a string') full_pos2,
+PATINDEX('%[0-9]%', 'This is a string its only a string') num_pos,   --returns 0 bc no numbers
+PATINDEX('%[0-9]%', 'This is a string 1its only a string') num_pos1   --returns pos 18
+)
+
+
+
+select
+num_pos,
+num_pos1,
+full_pos, --returns starting point of word only
+full_pos2, --also pulls the start position of word in string
+SUBSTRING(strg, full_pos, 4) sub, --returns only
+left(strg, full_pos) lft,
+right(strg, full_pos) rgt
+from mystring
+
+
+
+SELECT ALL TABLES AND COLUMS FROM A DATABASE
+
+USE EIS
+GO 
+SELECT t.name AS table_name,
+SCHEMA_NAME(schema_id) AS schema_name,
+c.name AS column_name
+FROM sys.tables AS t
+INNER JOIN sys.columns c ON t.OBJECT_ID = c.OBJECT_ID
+--WHERE c.name LIKE '%EmployeeID%'
+ORDER BY schema_name, table_name; 
+
+
+
+
+
+USE EIS;
+GO
+SELECT name AS object_name
+  ,SCHEMA_NAME(schema_id) AS schema_name
+  ,type_desc
+  ,create_date
+  ,modify_date
+FROM sys.objects
+WHERE name LIKE '%livevox%'
+ORDER BY name, type_desc;
+GO
+
+
+
+
+
+
+looking up stored procedures
+
+
+USE BIDWSandbox
+
+SELECT 
+  SCHEMA_NAME(schema_id) AS [Schema],
+  Name
+FROM sys.procedures
+
+where name like '%AffiliateAnalysis%';
+
+
+
+
+
+
+Split list TSQL
+
+
+
+
+
+DECLARE @TestList VARCHAR(255)
+
+SET @TestList = 'A,B,C,D,E'
+
+
+SELECT value FROM FnSplit(@TestList,',')
+
+Results:
+A
+B
+C
+D
+E
+
+
+
+OR
+
+
+
+DECLARE @Number VARCHAR(MAX)
+DECLARE @type VARCHAR(50)
+DECLARE @Value VARCHAR(MAX)= LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(@Number,CHAR(9),''),CHAR(13),''),CHAR(10),''),CHAR(160),'')))
+--SET @type='Phone'
+--test value as string
+SET @Value='12725-49834-21178546,
+12725-49835-21178549,
+12725-49838-21178552,
+12725-49839-21178555,
+12725-49840-21178558,
+12725-49841-21178561,
+12725-49842-21178564,
+12725-49852-21178591,
+12725-49854-21178594,
+12725-49855-21178597'
+
+set @Value= LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(@Value,CHAR(9),''),CHAR(13),''),CHAR(10),''),CHAR(160),'')))
+
+
+--DECLARE @TestList VARCHAR(255)
+
+--SET @TestList = 'A,B,C,D,E'
+
+
+--SELECT value FROM Fn_Split(@TestList,',')
+
+
+
+
+--seperate and pivot list into column
+--DROP TABLE IF EXISTS #StageLoans1
+select value from string_split(@value,',')
+
+
+
+
+
+
+Months ago
+datediff(month, DATEFROMPARTS(br_year, br_month, 1), getdate()) fmo
+
+
+Years go 
+year(getdate()) - year(end_range) years_ago
+
+
+create a date
+DATEFROMPARTS(year, month, 1)
+
+
+EXAMPLE OF LEAD:
+
+  with test as (
+
+  select top 10 
+  BorrowerId, 
+  BorrowerNumber,
+  LegacyBorrowerNumber,
+  (case when BorrowerId between 0 and 5 then 'a' else 'b' end) "bin"
+  from Borrower.Borrower
+
+  )
+
+
+
+  select
+  *,
+  lead(BorrowerId, 1) over( order by BorrowerNumber) over_test,
+    lead(BorrowerId, 1) over( partition by bin order by BorrowerNumber) part_test
+  from test
+
+RESULT:
+
+BorrowerId	BorrowerNumber	LegacyBorrowerNumber	bin	over_test	part_test
+1		80000007	500720			a	2		2
+2		80000010	1508540			a	3		3
+3		80000013	1459142			a	4		4
+4		80000016	1555889			a	9		5
+5		80000028	194621			a	6		NULL
+9		80000022	1508136			b	5		6
+6		80000040	1508734			b	7		7
+7		80000043	1511276			b	8		8
+8		80000046	1505149			b	10		10
+10		80000058	1411232			b	NULL		NULL
+
+
+
+
+
+
+
+
+
+PREVIOUS CALENDAR MONTH
+and month(doc_date) = month(dateadd(month,-1,today()))
+and doc_Date between DATEADD(month,-6,TODAY()) AND TODAY()
+
+Timestamp for excel inv_date >= '2022-01-22 00:00:00:000'   
+yyyy-mm-dd
+
+where exists (select column_name from table_b where table_a.column = table_b.column (other conditions))
+
+CHECK FOR DUPLICATES W SQL
+ROW_NUMBER() OVER(PARTITION BY count_duplicated_item_unique_value ORDER BY use_this_thing_as_theduplicatingfactor_ie_multipledates DESC) as Dupes
+where Dupes = 2
+
+
+capture previous years by calendar eyar
+BETWEEN DATEADD(month,-24, cast((cast(year(today()) as varchar) + '-01-01') as date) ) AND TODAY()
+
+
+Sybase
+
+DATEFORMAT(cal_date,'YYYY-MM-01') "Start of month",
+DATEDIFF(month, "Start of month",today()) periods_ago
+
+
+t-sql
+
+
+select 
+DATEADD(DAY,1,EOMONTH(DATEADD(MONTH,-1, CalendarDate))) "BOM",
+DATEDIFF(month, DATEADD(DAY,1,EOMONTH(DATEADD(MONTH,-1, CalendarDate))),getdate()) periods_ago,
+* 
+
+from eis.dim.date (nolock)
+
+where CalendarDate between dateadd(year, -2, getdate()) and eomonth(cast(dateadd(month, 0, getdate()) as date))
+
+
+order by calendardate desc
+
+
+
+VARIABLES
+
+
+declare @CounterStart as int
+declare @Counter as int
+
+select @CounterStart = COUNT(*)/50 from #FullPool
+select @Counter = COUNT(*)/50 from #Pool
+
+
+select @CounterStart
+
+
+set @Counter = @Counter - 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CURRENT FISCAL YEAR
+------------------------------------------------------------------------
+
+and left(cast(per_period as varchar),4) = cast(year(today()) as varchar)
+
+
+
+
+CREATE VIEWS -- note you can't use temp tables in views
+---------------------------------------------------------------------
+
+USE [EIS]
+GO
+
+CREATE VIEW Rpt.vwNAME as
+
+select * from sometable
+
+go
+
+
+
+ALTER VIEWS
+---------------------------------------------------------------------
+
+
+USE [EIS]
+GO
+
+/****** Object:  View [Rpt].[vwEISJobStatistics]    Script Date: 10/6/2022 8:42:38 AM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+ALTER view [Rpt].[vwEISJobStatistics]
+
+as 
+
+select statment here
+
+GO
+
+
+
+
+
+
+
+
+
+get periods ago
+------------------------------------------------------------
+selected_periods AS
+	(	SELECT
+		CONVERT(Date,GETDATE()) date0,
+		DATEDIFF(
+			month,
+			CONVERT(Date,DATEFORMAT(per_to,'YYYY-MM-01') ),
+			(CASE WHEN 
+				DAY(date0)>=26 THEN CONVERT(Date,DATEFORMAT(DATEADD(month,1,date0),'YYYY-MM-01'))
+				ELSE CONVERT(Date,DATEFORMAT(date0,'YYYY-MM-01') )
+				END)
+			) periods_ago,
+		per_period,
+	        per_from,	     
+	        per_to,
+		CONVERT(Integer,per_period/100) fy,
+		(CASE WHEN (MONTH(date0)>3 OR (MONTH(date0)=3 AND DAY(date0)>=26)) THEN YEAR(date0) ELSE YEAR(date0)-1 END)-fy fy_ago
+	FROM users.period
+	WHERE fy_ago in (0,1)
+	)
+
+
+
+
+no period 13
+
+---------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+BULK STORES
+----------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+pivoting a column to header in power query
+see fil PIVOT HEADERS in reports folder for example
+
+1. Select The header column and the valued columns you want to pivot
+exclude the columns like location, date, period you want to remain the same
+2. select the Pivot columns option and sum or count the columns that have values
+
+
+select
+'2022-01-01' "DAte",
+'A' "header",
+1 goods
+
+
+union
+
+select
+'2022-02-02' "Date",
+'B' "header",
+2 goods
+
+union
+
+select
+'2022-03-01' "Date",
+'C' "header",
+3 goods
+
+
+creating a switch statement in sql
+
+
+DECLARE @Number VARCHAR(MAX)
+DECLARE @type VARCHAR(50)
+DECLARE @Value VARCHAR(MAX)= LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(@Number,CHAR(9),''),CHAR(13),''),CHAR(10),''),CHAR(160),'')))
+--SET @type='Phone'
+--test value as string
+--SET @Value='11225-10730-6201242,
+--11225-11125-6201634,
+--11225-11343-6201848,
+--11225-11535-6202039,
+--11225-11898-6202401,
+--11225-12334-6202834,
+--11225-12444-6202942,
+--11225-12580-6203078,
+--11225-13514-6204002,
+--11225-13623-6204109,
+--11225-13893-6204377,
+--11225-15394-6205863'
+
+set @Value= LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(@Value,CHAR(9),''),CHAR(13),''),CHAR(10),''),CHAR(160),'')))
+--set @type = 'Loan'
+
+
+
+drop table if exists #StageLoans
+select value as Number
+into #StageLoans
+from string_split(@value,',')
+
+
+
+
+DROP TABLE IF EXISTS #SelectedLoans
+CREATE TABLE #SelectedLoans
+(DisplayLoanNumber VARCHAR(50))
+IF @type='Loan'
+BEGIN 
+	INSERT INTO #SelectedLoans (DisplayLoanNumber)
+	SELECT l.DisplayLoanNumber
+	FROM eis.Loan.Loan L (NOLOCK)
+	JOIN eis.Borrower.Borrower B (NOLOCK) ON B.BorrowerId = l.BorrowerId
+	JOIN #StageLoans sl (NOLOCK) ON  l.DisplayLoanNumber=sl.Number
+END 
+ELSE IF @type='SSN'
+BEGIN 
+	INSERT INTO #SelectedLoans (DisplayLoanNumber)
+	SELECT l.DisplayLoanNumber
+	FROM eis.Loan.loan L (NOLOCK)
+	JOIN eis.Borrower.Borrower B (NOLOCK) ON B.BorrowerId = l.BorrowerId
+	JOIN Eis.sec.VwBorrowerSSN SSN (nolock) ON SSN.BorrowerId = b.BorrowerId
+	JOIN #StageLoans sl (NOLOCK) ON  SSN.SSN=sl.Number
+END 
+
+
+
+select * from #SelectedLoans
+
+
+
+
+
+Importing JSON
+
+
+
+
+INSERT INTO Rpt.UserlaneReachedYN_test (foreignUserId, reached, interacted)
+SELECT foreignUserId, reached, interacted
+FROM OPENROWSET (BULK 'C:\Users\Jennifer.Hightower\OneDrive - Titlemax of Georgia, Inc\Desktop\UserlaneJson\export_1000000036872', SINGLE_CLOB) AS json
+CROSS APPLY OPENJSON(json) WITH (
+    foreignUserId VARCHAR(255),
+    reached BIT,
+    interacted BIT
+) AS data;
+
+
+--OR
+
+
+use BIDWSandbox
+
+SELECT foreignUserId, reached, interacted
+
+ 
+
+FROM dbo.export_1000000036872 E
+
+ 
+
+CROSS APPLY OPENJSON(myjson) WITH (
+    foreignUserId VARCHAR(255),
+    reached BIT,
+    interacted BIT
+) AS data;
+
+
+
